@@ -22,12 +22,7 @@ import org.infinispan.client.hotrod.logging.Log;
 import org.infinispan.client.hotrod.logging.LogFactory;
 import org.infinispan.commons.marshall.ProtoStreamMarshaller;
 import org.infinispan.commons.util.Util;
-import org.infinispan.protostream.BaseMarshaller;
-import org.infinispan.protostream.EnumMarshaller;
-import org.infinispan.protostream.FileDescriptorSource;
-import org.infinispan.protostream.MessageMarshaller;
-import org.infinispan.protostream.RawProtobufMarshaller;
-import org.infinispan.protostream.SerializationContextInitializer;
+import org.infinispan.protostream.*;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.ClassInfo;
@@ -149,6 +144,9 @@ class InfinispanClientProcessor {
             InfinispanClientProducer.handleProtoStreamRequirements(properties);
             Collection<ClassInfo> initializerClasses = index.getAllKnownImplementors(DotName.createSimple(
                     SerializationContextInitializer.class.getName()));
+            initializerClasses
+                    .addAll(index.getAllKnownImplementors(DotName.createSimple(GeneratedSchema.class.getName())));
+
             Set<SerializationContextInitializer> initializers = new HashSet<>(initializerClasses.size());
             for (ClassInfo ci : initializerClasses) {
                 Class<?> initializerClass = Thread.currentThread().getContextClassLoader().loadClass(ci.toString());

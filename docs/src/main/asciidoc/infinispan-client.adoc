@@ -13,6 +13,7 @@ provides functionality to allow the client that can connect to said server when 
 Check out the https://infinispan.org/documentation[Infinispan documentation] to find out more about the Infinispan project,
 in particular the https://infinispan.org/docs/stable/titles/hotrod_java/hotrod_java.html[Hot Rod Java client guide].
 
+
 == Solution
 
 We recommend that you follow the instructions in the next sections and create the application step by step.
@@ -43,14 +44,72 @@ This will add the following to your pom.xml
 ----
 
 The Infinispan client is configurable in the `application.properties` file that can be
-provided in the `src/main/resources` directory. These are the properties that
-can be configured in this file:
-
-include::{generated-dir}/config/quarkus-infinispan-client.adoc[opts=optional, leveloffset=+1]
+provided in the `src/main/resources` directory.
 
 It is also possible to configure a `hotrod-client.properties` as described in the Infinispan user guide. Note that
 the `hotrod-client.properties` values overwrite any matching property from the other configuration values (eg. near cache).
 This properties file is build time only and if it is changed, requires a full rebuild.
+
+== Running and connecting to Infinispan
+If you are new to Infinispan, check the 5 minute https://infinispan.org/get-started/[Getting stated with Infinispan] tutorial to
+learn how to run a server locally.
+
+As of Infinispan 12, authentication and authorization are enabled by default in the server, therefore you should add a user.
+
+If you are running a container, passing the USER="admin" and PASS="password" will make the trick.
+
+If you are running a downloaded distribution, use the Command Line Tool from the downloaded server folder.
+[source,bash]
+----
+./bin/cli.sh user create admin -p password
+----
+
+Once your Infinispan Server is running, connect to the Infinispan Server with these properties.
+
+[source,properties]
+----
+# Your configuration properties
+quarkus.infinispan-client.server-list=localhost:11222
+
+# Authentication
+quarkus.infinispan-client.auth-username=admin
+quarkus.infinispan-client.auth-password=password
+
+## Docker 4 Mac workaround
+quarkus.infinispan-client.client-intelligence=BASIC
+----
+
+== Authentication
+
+This chart illustrates what mechanisms have been verified to be working properly with
+the Quarkus Infinispan Client extension.
+
+.Mechanisms
+|===
+| Name | Verified
+
+| DIGEST-MD5
+| [green]*Y*
+
+| PLAIN
+| [green]*Y*
+
+| SCRAM
+| [red]*N*
+
+| EXTERNAL
+| [green]*Y*
+
+| GSSAPI
+| [red]*N*
+
+| Custom
+| [red]*N*
+
+|===
+
+The guide for configuring these can be found https://infinispan.org/docs/stable/titles/hotrod_java/hotrod_java.html#hotrod_authentication[here].
+However, you need to configure these through the `hotrod-client.properties` file if using Dependency Injection.
 
 == Serialization (Key Value types support)
 
@@ -94,12 +153,19 @@ public class Book {
 }
 ----
 
-Serialization of user types uses a library based on protobuf, called Protostream.
+Serialization of user types uses a library based on protobuf,
+called https://github.com/infinispan/protostream[Protostream].
+
+[TIP]
+Infinispan caches can store keys and values in different encodings, but the recommended way
+is https://developers.google.com/protocol-buffers[Protobuf].
+The https://infinispan.org/docs/stable/titles/encoding/encoding.html[Marshalling and Encoding] guide
+describes how Infinispan encodes data and explains how to use Protobuf and Protostream in detail.
 
 === Annotation based Serialization
 
 This can be done automatically by adding protostream annotations to your user classes.
-In addition a single Initializer annotated interface is required which controls how
+In addition, a single Initializer annotated interface is required which controls how
 the supporting classes are generated.
 
 Here is an example of how the preceding classes should be changed:
@@ -159,20 +225,24 @@ Here is an example of how the preceding classes should be changed:
 If your classes have only mutable fields, then the `ProtoFactory` annotation
 is not required, assuming your class has a no arg constructor.
 
-Then all that is required is a very simple `SerializationContextInitializer` interface with an annotation
+Then all that is required is a very simple `GeneratedSchema` interface with an annotation
 on it to specify configuration settings
 
-.BookContextInitializer.java
+.BooksSchema.java
 [source,java]
 ----
-import org.infinispan.protostream.SerializationContextInitializer;
+import org.infinispan.protostream.GeneratedSchema;
 import org.infinispan.protostream.annotations.AutoProtoSchemaBuilder;
 import org.infinispan.protostream.types.java.math.BigDecimalAdapter;
 
 @AutoProtoSchemaBuilder(includeClasses = { Book.class, Author.class, BigDecimalAdapter.class }, schemaPackageName = "book_sample")
-interface BookContextInitializer extends SerializationContextInitializer {
+interface BookStoreSchema extends GeneratedSchema {
 }
 ----
+
+[TIP]
+Protostream provides default Protobuf mappers for commonly used types as `BigDecimal`,
+included under the `org.infinispan.protostream.types` package.
 
 So in this case we will automatically generate the marshaller and schemas for the included classes and
 place them in the schema package automatically. The package does not have to be provided, but if you
@@ -357,6 +427,28 @@ annotation is not required and if it is not supplied, the default cache will be 
 
 NOTE: Other types may be supported for injection, please see other sections for more information
 
+=== Registering Protobuf Schemas with Infinispan Server
+rotostream provides default Protobuf
+You will then need to register the Protobuf schemas
+with Infinispan Server if you want to perform queries or convert from `Protobuf` to other media types
+such as `Json`.
+
+[TIP]
+You can check the schemas that exist under the `Schemas` tab by logging into 
+the Infinispan console at  `http://localhost:11222`
+
+By default protobuf schemas generated this way will be registered by this extension
+when the client first connects.
+However, it might be required to handle the registration manually as a schema may evolve
+over time when used in production, so you can disable this from occurring by configuring the 
+`quarkus.infinispan-client.use-schema-registration` to `false`.
+To configure the schema manually please use https://infinispan.org/docs/infinispan-operator/master/operator.html[Infinispan Operator]
+for Kubernetes deployments, Infinispan Web Console, 
+https://infinispan.org/docs/stable/titles/rest/rest.html#rest_v2_protobuf_schemas[REST API] or the
+https://infinispan.org/docs/stable/titles/encoding/encoding.html#registering-sci-remote-caches_marshalling[Hot Rod Java Client]
+.
+
+
 == Querying
 
 The Infinispan client supports both indexed and non indexed querying as long as the
@@ -407,37 +499,12 @@ and/or keystore. This is further detailed https://infinispan.org/docs/stable/tit
 The Infinispan Client extension enables SSL by default. You can read more about this
 at link:native-and-ssl[Using SSL With Native Executables].
 
-== Authentication
-
-This chart illustrates what mechanisms have been verified to be working properly with
-the Quarkus Infinispan Client extension.
-
-.Mechanisms
-|===
-| Name | Verified
-
-| DIGEST-MD5
-| [green]*Y*
-
-| PLAIN
-| [green]*Y*
-
-| EXTERNAL
-| [green]*Y*
-
-| GSSAPI
-| [red]*N*
-
-| Custom
-| [red]*N*
-
-|===
-
-The guide for configuring these can be found https://infinispan.org/docs/stable/titles/hotrod_java/hotrod_java.html#hotrod_authentication[here].
-However you need to configure these through the `hotrod-client.properties` file if using Dependency Injection.
-
 == Additional Features
 
 The Infinispan Client has additional features that were not mentioned here. This means this
 feature was not tested in a Quarkus environment and they may or may not work. Please let us
 know if you need these added!
+
+== Configuration Reference
+
+include::{generated-dir}/config/quarkus-infinispan-client.adoc[opts=optional, leveloffset=+1]
