@@ -7,33 +7,29 @@ https://github.com/quarkusio/quarkus/tree/main/docs/src/main/asciidoc
 
 include::./attributes.adoc[]
 
-Infinispan is an in memory data grid that allows running in a server outside of application processes. This extension
-provides functionality to allow the client that can connect to said server when running in Quarkus.
+Infinispan is a distributed, in-memory key/value store that provides Quarkus applications with a highly configurable and independently scalable data layer.
+This extension gives you client functionality that connects applications running on Quarkus with remote Infinispan clusters.
 
-Check out the https://infinispan.org/documentation[Infinispan documentation] to find out more about the Infinispan project,
-in particular the https://infinispan.org/docs/stable/titles/hotrod_java/hotrod_java.html[Hot Rod Java client guide].
-
+To find out more about Infinispan, visit the https://infinispan.org/documentation[Infinispan documentation].
 
 == Solution
 
-We recommend that you follow the instructions in the next sections and create the application step by step.
-However, you can go right to the completed example.
+We recommend that you complete each step in the following sections to create the application.
+However, you can proceed directly to the completed solution as follows:
 
-Clone the Git repository: `git clone {quickstarts-clone-url}`, or download an {quickstarts-archive-url}[archive].
+Clone the Git repository: `git clone {quickstarts-clone-url}` or download an {quickstarts-archive-url}[archive].
+Locate the solution in the `infinispan-client-quickstart` {quickstarts-tree-url}/infinispan-client-quickstart[directory].
 
-The solution is located in the `infinispan-client-quickstart` {quickstarts-tree-url}/infinispan-client-quickstart[directory].
+== Adding the Infinispan client extension
 
-== Configuration
-
-Once you have your Quarkus project configured you can add the `infinispan-client` extension
-to your project by running the following from the command line in your project base directory.
+Run the following command in the base directory of your Quarkus project to add the `infinispan-client` extension:
 
 [source]
 ----
 ./mvnw quarkus:add-extension -Dextensions="infinispan-client"
 ----
 
-This will add the following to your pom.xml
+This command adds the following dependency to your `pom.xml`:
 
 [source,xml]
 ----
@@ -43,73 +39,66 @@ This will add the following to your pom.xml
 </dependency>
 ----
 
-The Infinispan client is configurable in the `application.properties` file that can be
-provided in the `src/main/resources` directory.
+== Configuring the Infinispan client
 
-It is also possible to configure a `hotrod-client.properties` as described in the Infinispan user guide. Note that
-the `hotrod-client.properties` values overwrite any matching property from the other configuration values (eg. near cache).
-This properties file is build time only and if it is changed, requires a full rebuild.
+Open the `application.properties` file in the `src/main/resources` directory with any text editor.
 
-== Running and connecting to Infinispan
-If you are new to Infinispan, check the 5 minute https://infinispan.org/get-started/[Getting stated with Infinispan] tutorial to
-learn how to run a server locally.
+Note that Infinispan documentation refers to a `hotrod-client.properties` file.
+You can configure the Infinispan client with either properties file but `hotrod-client.properties` always takes priority over `application.properties`.
 
-As of Infinispan 12, authentication and authorization are enabled by default in the server, therefore you should add a user.
+Additionally, you cannot update configuration properties at runtime.
+If you modify `application.properties` or `hotrod-client.properties`, you must rebuild the application before those changes take effect.
 
-If you are running a container, passing the USER="admin" and PASS="password" will make the trick.
+== Connecting to Infinispan clusters
 
-If you are running a downloaded distribution, use the Command Line Tool from the downloaded server folder.
-[source,bash]
-----
-./bin/cli.sh user create admin -p password
-----
-
-Once your Infinispan Server is running, connect to the Infinispan Server with these properties.
+Add the following properties to connect to Infinispan Server:
 
 [source,properties]
 ----
-# Your configuration properties
+# Infinispan Server address
 quarkus.infinispan-client.server-list=localhost:11222
 
 # Authentication
 quarkus.infinispan-client.auth-username=admin
 quarkus.infinispan-client.auth-password=password
 
-## Docker 4 Mac workaround
+# Infinispan client intelligence
+# Use BASIC as a Docker for Mac workaround
 quarkus.infinispan-client.client-intelligence=BASIC
 ----
 
-== Authentication
+.Running Infinispan Server
 
-This chart illustrates what mechanisms have been verified to be working properly with
-the Quarkus Infinispan Client extension.
+To use the Infinispan client extension, you need at least one running instance of Infinispan Server.
 
-.Mechanisms
-|===
-| Name | Verified
+Check out our 5 minute https://infinispan.org/get-started/[Getting stated with Infinispan] tutorial to run Infinispan Server locally.
 
-| DIGEST-MD5
-| [green]*Y*
+Infinispan Server also enables authentication and security authorization by default so you need to create a user with permissions.
 
-| PLAIN
-| [green]*Y*
+* If you run the Infinispan Server image, pass the `USER="admin"` and `PASS="password"` parameters.
+* If you run the bare metal distribution, use the Command Line Interface (CLI) as follows:
++
+[source,bash]
+----
+$ ./bin/cli.sh user create admin -p password
+----
 
-| SCRAM
-| [red]*N*
+=== Authentication mechanisms
 
-| EXTERNAL
-| [green]*Y*
+You can use the following authentication mechanisms with the Infinispan client:
 
-| GSSAPI
-| [red]*N*
+* DIGEST-MD5
+* PLAIN (recommended only in combination with TLS encryption)
+* EXTERNAL
 
-| Custom
-| [red]*N*
+Other authentication mechanisms, such as SCRAM and GSSAPI, are not yet verified with the Infinispan client.
 
-|===
+You can find more information on configuring authentication in https://infinispan.org/docs/stable/titles/hotrod_java/hotrod_java.html#hotrod_endpoint_auth-hotrod-client-configuration[Hot Rod Endpoint Authentication Mechanisms].
 
-The guide for configuring these can be found https://infinispan.org/docs/stable/titles/hotrod_java/hotrod_java.html#hotrod_authentication[here].
-However, you need to configure these through the `hotrod-client.properties` file if using Dependency Injection.
+[NOTE]
+====
+You must configure authentication in the `hotrod-client.properties` file if you use Dependency Injection.
+====
 
 == Serialization (Key Value types support)
 
@@ -157,10 +146,12 @@ Serialization of user types uses a library based on protobuf,
 called https://github.com/infinispan/protostream[Protostream].
 
 [TIP]
-Infinispan caches can store keys and values in different encodings, but the recommended way
-is https://developers.google.com/protocol-buffers[Protobuf].
-The https://infinispan.org/docs/stable/titles/encoding/encoding.html[Marshalling and Encoding] guide
-describes how Infinispan encodes data and explains how to use Protobuf and Protostream in detail.
+====
+Infinispan caches can store keys and values in different encodings, but recommend using https://developers.google.com/protocol-buffers[Protocol Buffers (Protobuf)].
+
+For more information see our https://infinispan.org/docs/stable/titles/encoding/encoding.html[Cache Encoding and Marshalling] guide.
+====
+
 
 === Annotation based Serialization
 
@@ -241,16 +232,14 @@ interface BookStoreSchema extends GeneratedSchema {
 ----
 
 [TIP]
-Protostream provides default Protobuf mappers for commonly used types as `BigDecimal`,
-included under the `org.infinispan.protostream.types` package.
+Protostream provides default Protobuf mappers for commonly used types as `BigDecimal`, included in the `org.infinispan.protostream.types` package.
 
 So in this case we will automatically generate the marshaller and schemas for the included classes and
-place them in the schema package automatically. The package does not have to be provided, but if you
-utilize querying, you must know the generated package.
+place them in the schema package automatically. The package does not have to be provided, but if you use Infinispan query capabilities, you must know the generated package.
 
-NOTE: In Quarkus the `schemaFileName` and `schemaFilePath` attributes should NOT be set on the `AutoProtoSchemaBuilder` annotation, setting either will cause native runtime to error.
+NOTE: In Quarkus the `schemaFileName` and `schemaFilePath` attributes should NOT be set on the `AutoProtoSchemaBuilder` annotation. Setting either attributes causes native runtime errors.
 
-=== User written serialization
+=== Custom serialization
 
 The previous method is suggested for any case when the user can annotate their classes.
 Unfortunately the user may not be able to annotate all classes they will put in the
@@ -428,30 +417,25 @@ annotation is not required and if it is not supplied, the default cache will be 
 NOTE: Other types may be supported for injection, please see other sections for more information
 
 === Registering Protobuf Schemas with Infinispan Server
-rotostream provides default Protobuf
-You will then need to register the Protobuf schemas
-with Infinispan Server if you want to perform queries or convert from `Protobuf` to other media types
-such as `Json`.
+You need to register the generated Protobuf schemas with Infinispan Server to perform queries or convert from `Protobuf` to other media types such as `JSON`.
 
 [TIP]
-You can check the schemas that exist under the `Schemas` tab by logging into 
-the Infinispan console at  `http://localhost:11222`
+You can check the schemas that exist under the `Schemas` tab by logging into Infinispan Console at  `http://localhost:11222`
 
-By default protobuf schemas generated this way will be registered by this extension
+By default Protobuf schemas generated this way will be registered by this extension
 when the client first connects.
 However, it might be required to handle the registration manually as a schema may evolve
-over time when used in production, so you can disable this from occurring by configuring the 
+over time when used in production, so you can disable this from occurring by configuring the
 `quarkus.infinispan-client.use-schema-registration` to `false`.
 To configure the schema manually please use https://infinispan.org/docs/infinispan-operator/master/operator.html[Infinispan Operator]
-for Kubernetes deployments, Infinispan Web Console, 
+for Kubernetes deployments, Infinispan Console,
 https://infinispan.org/docs/stable/titles/rest/rest.html#rest_v2_protobuf_schemas[REST API] or the
-https://infinispan.org/docs/stable/titles/encoding/encoding.html#registering-sci-remote-caches_marshalling[Hot Rod Java Client]
-.
+https://infinispan.org/docs/stable/titles/encoding/encoding.html#registering-sci-remote-caches_marshalling[Hot Rod Java Client].
 
 
 == Querying
 
-The Infinispan client supports both indexed and non indexed querying as long as the
+The Infinispan client supports both indexed and non-indexed querying as long as the
 `ProtoStreamMarshaller` is configured above. This allows the user to query based on the
 properties of the proto schema.
 
@@ -496,7 +480,7 @@ Encryption at this point requires additional steps to get working.
 The first step is to configure the `hotrod-client.properties` file to point to your truststore
 and/or keystore. This is further detailed https://infinispan.org/docs/stable/titles/hotrod_java/hotrod_java.html#hotrod_encryption[here].
 
-The Infinispan Client extension enables SSL by default. You can read more about this
+The Infinispan Client extension enables SSL/TLS by default. You can read more about this
 at link:native-and-ssl[Using SSL With Native Executables].
 
 == Additional Features
